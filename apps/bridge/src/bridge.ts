@@ -386,7 +386,7 @@ export class Bridge {
           ? `${contextPrefix}\n\n${msgHeader} ${msg.content}`
           : `${msgHeader} ${msg.content}`;
 
-        // Fire-and-forget: agent handles all responses via `zano` CLI
+        // Fire-and-forget: agent handles all responses via `slock` CLI
         await this.agentManager.sendToAgent(agentId, prompt);
       } catch (err) {
         console.error(

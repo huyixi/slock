@@ -5,10 +5,8 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
-    // Return a dummy client during build/prerender — will never be called at runtime
-    return createBrowserClient(
-      "https://placeholder.supabase.co",
-      "placeholder-key"
+    throw new Error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY. Check apps/web/.env.local and restart the dev server."
     );
   }
 

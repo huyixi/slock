@@ -4,7 +4,7 @@ import { hostname, platform, arch } from "os";
 import { Bridge } from "./bridge.js";
 
 // Default server URL (can be overridden)
-const DEFAULT_SERVER_URL = "https://zano.fehey.com";
+const DEFAULT_SERVER_URL = "https://slock.fehey.com";
 
 interface ConnectResponse {
   supabaseUrl: string;
@@ -43,12 +43,12 @@ function parseArgs(): { serverUrl: string; apiKey: string; agentsDir: string } {
       case "--help":
       case "-h":
         console.log(`
-  Usage: zano-bridge [options]
+  Usage: slock-bridge [options]
 
   Options:
     --api-key <key>        Machine API key (required, generate at ${DEFAULT_SERVER_URL})
     --server-url <url>     Server URL (default: ${DEFAULT_SERVER_URL})
-    --agents-dir <path>    Agent workspaces directory (default: ~/.zano/agents)
+    --agents-dir <path>    Agent workspaces directory (default: ~/.slock/agents)
     -h, --help             Show this help message
 `);
         process.exit(0);
@@ -56,13 +56,13 @@ function parseArgs(): { serverUrl: string; apiKey: string; agentsDir: string } {
   }
 
   // Also support env vars as fallback (for local dev)
-  if (!apiKey) apiKey = process.env.ZANO_API_KEY || "";
+  if (!apiKey) apiKey = process.env.SLOCK_API_KEY || "";
   if (!serverUrl || serverUrl === DEFAULT_SERVER_URL) {
-    serverUrl = process.env.ZANO_SERVER_URL || serverUrl;
+    serverUrl = process.env.SLOCK_SERVER_URL || serverUrl;
   }
 
   if (!agentsDir) {
-    agentsDir = (process.env.ZANO_AGENTS_DIR || "~/.zano/agents").replace(
+    agentsDir = (process.env.SLOCK_AGENTS_DIR || "~/.slock/agents").replace(
       "~",
       process.env.HOME || ""
     );
@@ -74,7 +74,7 @@ function parseArgs(): { serverUrl: string; apiKey: string; agentsDir: string } {
     console.error("  Generate one at your workspace settings page,");
     console.error("  then run:");
     console.error("");
-    console.error("    npx @fehey/zano-bridge --api-key zk_your_key_here");
+    console.error("    npx @fehey/slock-bridge --api-key zk_your_key_here");
     console.error("");
     process.exit(1);
   }
@@ -110,7 +110,7 @@ async function main() {
 
   console.log(`
   ╔══════════════════════════════════════╗
-  ║         Zano Local Bridge            ║
+  ║         Slock Local Bridge           ║
   ╚══════════════════════════════════════╝
 `);
   console.log(`  Server: ${serverUrl}`);

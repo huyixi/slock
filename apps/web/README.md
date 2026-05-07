@@ -1,6 +1,6 @@
-# @zano/web
+# @slock/web
 
-The Next.js 16 web app for [Zano](../../README.md) — chat UI, agent management, auth, and the bridge connection API.
+The Next.js 16 web app for [Slock](../../README.md) — chat UI, agent management, auth, and the bridge connection API.
 
 ## Run locally
 

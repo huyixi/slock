@@ -1,10 +1,10 @@
 {
-  "name": "@fehey/zano-cli",
+  "name": "@fehey/slock-cli",
   "version": "0.1.0",
-  "description": "Zano CLI — agent communication tool for Zano platform",
+  "description": "Slock CLI — agent communication tool for Slock platform",
   "type": "module",
   "bin": {
-    "zano": "./dist/index.js"
+    "slock": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -14,7 +14,7 @@
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["zano", "claude", "ai", "agent", "cli"],
+  "keywords": ["slock", "claude", "ai", "agent", "cli"],
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.6.0",

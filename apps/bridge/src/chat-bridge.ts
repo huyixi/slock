@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Zano MCP Chat Bridge
+ * Slock MCP Chat Bridge
  *
  * A standalone MCP server that Claude Code agents can call to:
  * - send_message: Send messages to channels or DMs
@@ -171,7 +171,7 @@ function formatTimestamp(iso: string): string {
 
 // Create MCP server
 const server = new McpServer({
-  name: "zano-chat",
+  name: "slock-chat",
   version: "1.0.0",
 });
 

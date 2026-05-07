@@ -46,7 +46,7 @@ export default function SignupPage() {
       <div className="w-full max-w-sm mx-4">
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Zano</CardTitle>
+            <CardTitle className="text-2xl">Slock</CardTitle>
             <CardDescription>Create your account</CardDescription>
           </CardHeader>
           <form onSubmit={handleSignup}>

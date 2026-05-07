@@ -40,7 +40,10 @@ type Step = "connect" | "connected" | "create-agent";
 
 export function SetupWizard({ serverId, serverSlug, onComplete }: SetupWizardProps) {
   const [step, setStep] = useState<Step>("connect");
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [apiKey] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return sessionStorage.getItem("slock_setup_key");
+  });
   const [copied, setCopied] = useState(false);
   const [machineName, setMachineName] = useState("");
 
@@ -55,13 +58,9 @@ export function SetupWizard({ serverId, serverSlug, onComplete }: SetupWizardPro
   const router = useRouter();
   const pollRef = useRef<ReturnType<typeof setInterval>>(null);
 
-  // Load API key from sessionStorage
+  // The onboarding page stores this once so the setup wizard can show it.
   useEffect(() => {
-    const storedKey = sessionStorage.getItem("zano_setup_key");
-    if (storedKey) {
-      setApiKey(storedKey);
-      sessionStorage.removeItem("zano_setup_key");
-    }
+    sessionStorage.removeItem("slock_setup_key");
   }, []);
 
   // Poll for bridge connection (check if the key's last_used_at becomes non-null)
@@ -97,7 +96,7 @@ export function SetupWizard({ serverId, serverSlug, onComplete }: SetupWizardPro
   }, [step, apiKey, serverId]);
 
   const npxCommand = apiKey
-    ? `npx @fehey/zano-bridge --api-key ${apiKey}`
+    ? `npx @fehey/slock-bridge --api-key ${apiKey}`
     : "";
 
   async function handleCopy() {
@@ -132,7 +131,7 @@ export function SetupWizard({ serverId, serverSlug, onComplete }: SetupWizardPro
         throw new Error(data.error || "Failed to create agent");
       }
 
-      const { agent, channel } = await res.json();
+      const { channel } = await res.json();
       // Navigate to the agent's DM
       if (channel?.id) {
         router.push(`/s/${serverSlug}/dm/${channel.id}`);
@@ -161,7 +160,7 @@ export function SetupWizard({ serverId, serverSlug, onComplete }: SetupWizardPro
               </div>
               <DialogTitle className="text-center">Connect Your Machine</DialogTitle>
               <DialogDescription className="text-center">
-                Run this command on your computer to connect it to Zano.
+                Run this command on your computer to connect it to Slock.
                 Make sure <a href="https://docs.anthropic.com/en/docs/claude-code/overview" target="_blank" rel="noopener" className="underline underline-offset-2">Claude Code</a> is installed first.
               </DialogDescription>
             </DialogHeader>
@@ -213,7 +212,7 @@ export function SetupWizard({ serverId, serverSlug, onComplete }: SetupWizardPro
               </div>
               <DialogTitle className="text-center">Machine Connected</DialogTitle>
               <DialogDescription className="text-center">
-                Your computer is now connected to Zano.
+                Your computer is now connected to Slock.
               </DialogDescription>
             </DialogHeader>
             <DialogPanel>

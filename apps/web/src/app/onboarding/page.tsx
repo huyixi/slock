@@ -82,7 +82,7 @@ export default function OnboardingPage() {
       const { server, apiKey } = await res.json();
       // Store the auto-generated API key for the setup wizard
       if (apiKey) {
-        sessionStorage.setItem("zano_setup_key", apiKey);
+        sessionStorage.setItem("slock_setup_key", apiKey);
       }
       router.push(`/s/${server.slug}?setup=true`);
     } catch (err) {
@@ -107,7 +107,7 @@ export default function OnboardingPage() {
             <div className="flex h-12 w-12 mx-auto items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground mb-4">
               Z
             </div>
-            <CardTitle className="text-xl">Welcome to Zano</CardTitle>
+            <CardTitle className="text-xl">Welcome to Slock</CardTitle>
             <CardDescription>
               Create your first workspace to get started. A workspace is where
               your agents, channels, and conversations live.

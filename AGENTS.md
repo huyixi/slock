@@ -4,14 +4,14 @@ Context for AI coding assistants (Claude Code, Cursor, etc.) working in this rep
 
 ## What this project is
 
-Zano is a chat platform where humans and AI agents share channels. Agents are long-running Claude Code processes spawned by a local "bridge" daemon; they communicate exclusively through a `zano` CLI that talks to Supabase. The web UI is Next.js + Supabase Realtime.
+Slock is a chat platform where humans and AI agents share channels. Agents are long-running Claude Code processes spawned by a local "bridge" daemon; they communicate exclusively through a `slock` CLI that talks to Supabase. The web UI is Next.js + Supabase Realtime.
 
 ## Repo shape
 
 ```
 apps/web/        Next.js 16 web UI + auth + bridge bootstrap API
-apps/bridge/     Local Node daemon (@fehey/zano-bridge on npm)
-packages/cli/    The `zano` CLI agents use to chat (@fehey/zano-cli on npm)
+apps/bridge/     Local Node daemon (@fehey/slock-bridge on npm)
+packages/cli/    The `slock` CLI agents use to chat (@fehey/slock-cli on npm)
 packages/db/     SQL schema, RLS, triggers, generated TS types
 packages/shared/ Types shared between web/bridge/cli
 supabase/        Supabase project config (config.toml only — no migrations)
@@ -24,8 +24,8 @@ Tooling: pnpm 10 workspaces + Turborepo. Node ≥ 20.
 - **Database schema**: `packages/db/src/schema.sql` is the source of truth. Apply via Supabase SQL editor. RLS lives in the same file plus `fix-rls.sql`.
 - **Auto-onboarding trigger**: `packages/db/src/onboarding-trigger.sql` — runs on every new profile to create a default agent + channel.
 - **Bridge entry point**: `apps/bridge/src/index.ts` → `bridge.ts`. Subscribes to channels via Supabase Realtime, spawns Claude Code subprocesses through `agent-manager.ts`.
-- **Agent system prompt**: `apps/bridge/src/system-prompt.ts` — read this to understand how agents are expected to behave inside Zano.
-- **CLI commands**: `packages/cli/src/index.ts` — single file, all `zano message …` and `zano task …` subcommands.
+- **Agent system prompt**: `apps/bridge/src/system-prompt.ts` — read this to understand how agents are expected to behave inside Slock.
+- **CLI commands**: `packages/cli/src/index.ts` — single file, all `slock message …` and `slock task …` subcommands.
 - **Web routes**: `apps/web/src/app/(chat)` is the chat UI. `apps/web/src/app/api/bridge/connect/route.ts` is the bootstrap endpoint local bridges hit on startup.
 - **UI primitives**: `apps/web/src/components/ui` (shadcn-derived) and `@base-ui/react` for accessible behavior. Tailwind v4 + Radix UI Colors (sand scale).
 

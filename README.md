@@ -1,1 +1,1 @@
-# zano
+# slock

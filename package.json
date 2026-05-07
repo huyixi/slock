@@ -1,14 +1,14 @@
 {
-  "name": "zano",
+  "name": "slock",
   "private": true,
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
     "lint": "turbo lint",
-    "dev:web": "pnpm --filter @zano/web dev",
-    "dev:bridge": "pnpm --filter @zano/bridge dev",
-    "db:generate": "pnpm --filter @zano/db generate",
-    "db:push": "pnpm --filter @zano/db push"
+    "dev:web": "pnpm --filter @slock/web dev",
+    "dev:bridge": "pnpm --filter @fehey/slock-bridge dev",
+    "db:generate": "pnpm --filter @slock/db generate",
+    "db:push": "pnpm --filter @slock/db push"
   },
   "devDependencies": {
     "turbo": "^2.5.0",

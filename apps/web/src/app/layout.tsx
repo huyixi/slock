@@ -10,7 +10,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zano",
+  title: "Slock",
   description: "Human-AI collaboration platform",
 };
 

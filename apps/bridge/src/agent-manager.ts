@@ -163,8 +163,10 @@ export class AgentManager {
 
       case "Bash": {
         const cmd: string = input.command || "";
-        // Detect zano/slock message send
-        const msgMatch = cmd.match(/(?:zano|slock)\s+message\s+send\s+--target\s+"?([^"]+)"?/);
+        // Detect message-send commands.
+        const msgMatch = cmd.match(
+          /slock\s+message\s+send\s+--target\s+"?([^"]+)"?/
+        );
         if (msgMatch) {
           return { label: "Sending message", detail: msgMatch[1] };
         }
@@ -429,22 +431,22 @@ ${agent.description || agent.display_name}
 
   /**
    * Set up CLI transport for the agent — writes a bash wrapper script
-   * and env config into .zano/ directory in agent workspace.
-   * Returns the .zano/ directory path (to prepend to PATH).
+   * and env config into .slock/ directory in agent workspace.
+   * Returns the .slock/ directory path (to prepend to PATH).
    */
   private prepareCliTransport(agentId: string, session: AgentSession): string {
-    const zanoDir = join(session.workDir, ".zano");
-    if (!existsSync(zanoDir)) {
-      mkdirSync(zanoDir, { recursive: true });
+    const slockDir = join(session.workDir, ".slock");
+    if (!existsSync(slockDir)) {
+      mkdirSync(slockDir, { recursive: true });
     }
 
-    const wrapperPath = join(zanoDir, "zano");
+    const wrapperPath = join(slockDir, "slock");
     let wrapperBody: string;
 
-    // Try to resolve the compiled CLI from @fehey/zano-cli npm package first
+    // Try to resolve the compiled CLI from @fehey/slock-cli npm package first
     try {
       const req = createRequire(import.meta.url);
-      const cliPath = req.resolve("@fehey/zano-cli/dist/index.js");
+      const cliPath = req.resolve("@fehey/slock-cli/dist/index.js");
       // Published mode: use node to run compiled JS directly
       wrapperBody = `#!/usr/bin/env bash\nexec node '${cliPath.replace(/'/g, "'\\''")}' "$@"\n`;
       console.log(`  [${session.displayName}] CLI resolved from npm package: ${cliPath}`);
@@ -459,7 +461,7 @@ ${agent.description || agent.display_name}
 
     writeFileSync(wrapperPath, wrapperBody, { mode: 0o755 });
     console.log(`  [${session.displayName}] CLI wrapper written: ${wrapperPath}`);
-    return zanoDir;
+    return slockDir;
   }
 
   private async spawnProcess(
@@ -468,8 +470,8 @@ ${agent.description || agent.display_name}
     systemPrompt: string,
     model: string = "opus"
   ): Promise<AgentProcess> {
-    // Prepare CLI transport (.zano/ wrapper + env vars)
-    const zanoDir = this.prepareCliTransport(agentId, session);
+    // Prepare CLI transport (.slock/ wrapper + env vars)
+    const slockDir = this.prepareCliTransport(agentId, session);
 
     const args = [
       "--output-format",
@@ -504,12 +506,12 @@ ${agent.description || agent.display_name}
         FORCE_COLOR: "0",
         NO_COLOR: "1",
         // CLI injection: agent identity + Supabase credentials
-        ZANO_AGENT_ID: agentId,
-        ZANO_SUPABASE_URL: this.supabaseUrl,
-        ZANO_SUPABASE_KEY: this.supabaseKey,
-        ZANO_AUTH_TOKEN: this.authToken,
-        // Prepend .zano/ to PATH so `zano` command is available
-        PATH: `${zanoDir}:${process.env.PATH ?? ""}`,
+        SLOCK_AGENT_ID: agentId,
+        SLOCK_SUPABASE_URL: this.supabaseUrl,
+        SLOCK_SUPABASE_KEY: this.supabaseKey,
+        SLOCK_AUTH_TOKEN: this.authToken,
+        // Prepend .slock/ to PATH so `slock` command is available
+        PATH: `${slockDir}:${process.env.PATH ?? ""}`,
       },
       stdio: ["pipe", "pipe", "pipe"],
     });

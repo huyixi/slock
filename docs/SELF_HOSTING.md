@@ -1,215 +1,347 @@
-# Self-hosting Zano
+# Self-hosting Slock
 
-This guide walks you through running your own Zano server end-to-end: Supabase project, schema, web app deployment, and pointing the bridge at your own server.
+This guide covers the current self-hosted setup for Slock: Supabase, the Next.js web app, and the local bridge that runs agents on your machine.
 
-## What you'll end up with
+## What you will run
 
-- A Supabase project (Postgres + Auth + Realtime) holding all your data.
-- The Zano web app running on a host of your choice (Vercel works out of the box; anything that runs Next.js 16 will do).
-- The bridge running on each machine where you want agents to live, talking to your own server instead of `zano.fehey.com`.
+- Supabase for Postgres, Auth, Row Level Security, and Realtime.
+- The Slock web app on Vercel or another Next.js host.
+- A local bridge process on each machine where you want Claude Code agents to run.
 
-Total time: about 30–45 minutes for a first run.
+The first setup usually takes 30-45 minutes.
 
 ## Prerequisites
 
-- Node ≥ 20 and pnpm 10 locally
-- A Supabase account (free tier is fine to start)
-- A Vercel account (or any Next.js host of your choice)
-- The repo cloned: `git clone https://github.com/EryouHao/zano.git && cd zano && pnpm install`
+- Node 20 or newer
+- pnpm 10
+- A Supabase project
+- A Vercel account, or another host that can run Next.js 16
+- A local clone:
 
----
+```bash
+git clone https://github.com/EryouHao/slock.git
+cd slock
+pnpm install
+```
 
 ## 1. Create a Supabase project
 
-1. Go to [supabase.com](https://supabase.com) and create a new project.
-2. Pick a strong database password and save it somewhere safe.
-3. Once the project is provisioned, head to **Project Settings → API** and grab:
-   - **Project URL** (looks like `https://abcdefg.supabase.co`)
-   - **`anon` public key** (a long JWT)
-   - **`service_role` secret key** (a long JWT — treat this like a password)
+Create a project at [supabase.com](https://supabase.com). After Supabase provisions it, open **Project Settings -> API** and copy:
 
-You'll use these in the next steps.
+- Project URL, for example `https://abcdefg.supabase.co`
+- `anon` public key
+- `service_role` secret key
+- JWT secret
+
+The JWT secret is in the same settings area. Slock uses it to mint a short-lived authenticated JWT for the bridge. Treat the service-role key and JWT secret as server-side secrets.
 
 ## 2. Apply the database schema
 
-Open the **SQL Editor** in your Supabase dashboard. Run the following files **in order** (copy the contents of each file from `packages/db/src/`, paste into the SQL editor, run, then move to the next):
+Open the Supabase **SQL Editor**. The SQL files in `packages/db/src/` are not a single ordered migration yet, so do not run every file from top to bottom.
 
-1. `schema.sql` — first run will fail at the `agents` table because it references `servers`. That's expected. Run it once to create `profiles` + the `handle_new_user` trigger, then continue.
-2. `servers.sql` — creates `servers` and `server_members`.
-3. `schema.sql` — run it again now that `servers` exists. The `profiles` block will skip (it's idempotent enough — or wrap your re-run with `DROP TABLE IF EXISTS` for the failed tables first). The remaining tables (`agents`, `channels`, `messages`, `tasks`) will create successfully.
-4. `machine-keys.sql` — adds the `machine_keys` table for bridge auth.
-5. `onboarding-trigger.sql` — installs the trigger that auto-creates an Onboarding Agent for every new user.
-6. `fix-rls.sql` — adjusts a few RLS policies to avoid circular dependencies.
+Run these chunks in this order.
 
-> **Note**: the schema isn't packaged as a single ordered migration yet — that's an open improvement (PRs welcome). If you hit an error mid-way, the message usually tells you exactly which table is missing.
+### 2.1 Profiles and signup trigger
 
-After applying all files, verify in **Database → Tables** that you see at least: `profiles`, `servers`, `server_members`, `agents`, `channels`, `channel_members`, `messages`, `tasks`, `machine_keys`.
+Open `packages/db/src/schema.sql` and run only the first part:
+
+```sql
+create extension if not exists "uuid-ossp";
+
+create table public.profiles (
+  id uuid references auth.users on delete cascade primary key,
+  email text not null,
+  display_name text not null,
+  avatar_url text,
+  created_at timestamptz default now() not null
+);
+
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, display_name)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1))
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create or replace trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+```
+
+This creates the `profiles` table first. `servers.sql` depends on it.
+
+### 2.2 Servers
+
+Run the full contents of:
+
+```txt
+packages/db/src/servers.sql
+```
+
+This creates `servers`, `server_members`, and their RLS policies.
+
+### 2.3 Chat tables
+
+Go back to `packages/db/src/schema.sql` and run from the `-- Agents` heading through the end of the file. Do not run the `profiles` section again.
+
+This creates:
+
+- `agents`
+- `channels`
+- `channel_members`
+- `messages`
+- `tasks`
+- base RLS policies
+- Supabase Realtime publication entries
+
+If Supabase reports that a Realtime publication entry already exists, remove that one `alter publication supabase_realtime add table ...` line and run the remaining lines.
+
+### 2.4 Agent model column
+
+The current web app and bridge read and write `agents.model`, but the checked-in `schema.sql` does not create it yet. Run this patch:
+
+```sql
+alter table public.agents
+add column if not exists model text not null default 'opus'
+check (model in ('opus', 'sonnet', 'haiku'));
+```
+
+### 2.5 RLS fixes
+
+Run the full contents of:
+
+```txt
+packages/db/src/fix-rls.sql
+```
+
+This replaces recursive channel/message policies with helper-function-based policies.
+
+### 2.6 Machine keys
+
+Run the full contents of:
+
+```txt
+packages/db/src/machine-keys.sql
+```
+
+This creates `machine_keys` for bridge authentication and updates policies so the bridge can act on behalf of the user's agents.
+
+Run `machine-keys.sql` after `fix-rls.sql`. It depends on `public.user_is_channel_member()` from `fix-rls.sql`, and its final policies need to remain in place for bridge access.
+
+### Do not run onboarding-trigger.sql
+
+Do not run:
+
+```txt
+packages/db/src/onboarding-trigger.sql
+```
+
+That file is stale for the current schema. It inserts fields and values that no longer match `agents`, and it does not provide the required `server_id` values.
+
+The current onboarding flow lives in the web app. After signup, `/onboarding` asks the user to create a workspace. The `/api/servers` route then creates the server membership and a default machine key.
+
+### Verify the database
+
+In **Database -> Tables**, confirm that Supabase has these tables:
+
+```txt
+profiles
+servers
+server_members
+agents
+channels
+channel_members
+messages
+tasks
+machine_keys
+```
+
+Also confirm that `agents` has a `model` column.
 
 ## 3. Configure Supabase Auth
 
-1. **Authentication → URL Configuration**:
-   - Set **Site URL** to wherever your web app will live (e.g. `https://zano.example.com` for production, `http://localhost:3000` for local dev).
-   - Add the same URL to **Redirect URLs**.
-2. **Authentication → Providers**:
-   - **Email** is enabled by default. Decide whether you want to require email confirmation (recommended for production).
-   - Optionally enable Google / GitHub / etc. if you want OAuth — Zano works with whatever Supabase Auth supports.
+Open **Authentication -> URL Configuration**:
 
-## 4. Run the web app locally (smoke test)
+- Set **Site URL** to your web app URL. For local testing, use `http://localhost:3000`.
+- Add the same URL to **Redirect URLs**.
 
-```bash
-cp apps/web/.env.local.example apps/web/.env.local
-```
+Email auth works out of the box. Enable OAuth providers such as GitHub or Google only if you want them.
 
-Edit `apps/web/.env.local`:
+## 4. Run the web app locally
+
+Create `apps/web/.env.local`:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_JWT_SECRET=your-jwt-secret
 ```
 
-Then:
+Run the web app:
 
 ```bash
 pnpm dev:web
 ```
 
-Open `http://localhost:3000`, sign up with an email, and confirm the onboarding trigger fires (you should see an "Onboarding Assistant" agent and channel appear automatically). If sign-up works and the agent appears, your DB is wired up correctly.
+Open `http://localhost:3000`, sign up, and create your first workspace on the onboarding screen. That should create a `servers` row, a `server_members` row, and a default `machine_keys` row.
 
 ## 5. Deploy the web app
 
-### Option A — Vercel (recommended)
+### Vercel
 
-1. Push your fork to GitHub, then import the repo into Vercel.
-2. **Root directory**: leave as repo root.
-3. **Framework preset**: Next.js (auto-detected).
-4. **Build command**: `cd ../.. && pnpm build --filter=@zano/web` (Vercel detects pnpm workspaces, but the explicit command is the most reliable).
-5. **Environment variables**:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (used by `/api/bridge/connect` to mint session JWTs — keep it secret)
-6. Deploy. Update Supabase **Site URL** + **Redirect URLs** to match your Vercel deployment URL once it's live.
-
-### Option B — anywhere else
-
-The web app is a standard Next.js 16 app. Anything that runs Node 20+ and supports App Router will work: Render, Fly, Railway, your own VPS with `pnpm build && pnpm start`. Set the same env vars listed above.
-
-## 6. Connect the bridge to your server
-
-The bridge runs on each machine where you want agents to live (typically your own laptop).
-
-### From npm (recommended)
+1. Push your fork to GitHub and import it into Vercel.
+2. Use the repo root as the Vercel root directory.
+3. Use the Next.js framework preset.
+4. Use this build command:
 
 ```bash
-npx @fehey/zano-bridge \
+pnpm --filter @slock/web build
+```
+
+5. Add these environment variables:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_JWT_SECRET=...
+```
+
+6. Deploy.
+7. Update Supabase **Site URL** and **Redirect URLs** to your deployed web URL.
+
+### Other hosts
+
+The web app is a standard Next.js 16 app. Any host that supports Node 20 and Next.js App Router should work.
+
+For a plain server, build and start the web package:
+
+```bash
+pnpm --filter @slock/web build
+pnpm --filter @slock/web start
+```
+
+Set the same environment variables listed above.
+
+## 6. Connect the bridge
+
+The bridge runs on the machine where Claude Code should run.
+
+After you create a workspace, the setup screen shows a machine key. You can also create keys later from the Machines/API keys UI.
+
+For self-hosting, pass your server URL explicitly:
+
+```bash
+npx @fehey/slock-bridge \
   --api-key zk_your_machine_key_here \
-  --server-url https://zano.example.com
+  --server-url https://slock.example.com
 ```
 
-To get a machine API key, log into your web app, go to **Settings → Machines**, and create a new key. Copy the `npx` command shown there — it's pre-filled with your key and (if you set `NEXT_PUBLIC_SERVER_URL` accordingly) your server URL.
-
-### From source
-
-If you're hacking on the bridge:
+Or set the server URL once:
 
 ```bash
-cp apps/bridge/.env.example apps/bridge/.env
-# fill in SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ZANO_USER_ID
-pnpm dev:bridge
+export SLOCK_SERVER_URL=https://slock.example.com
+npx @fehey/slock-bridge --api-key zk_your_machine_key_here
 ```
 
-This bypasses the `--api-key` flow and connects directly with the service role key (only do this for local development — never in production).
+If you omit `--server-url` and `SLOCK_SERVER_URL`, the bridge defaults to `https://slock.fehey.com`.
 
-## Bridge trust model — pick your level
+### Run the bridge from source
 
-The bridge is the most security-sensitive piece because it runs Claude Code on your machine with full local access. There are three ways to run it; pick based on how much you trust the published npm package.
-
-### Option 1 — Use the published `@fehey/zano-bridge` (recommended)
-
-This is what most self-hosters should do. Zero setup overhead, automatic bug fixes, works out of the box.
+Use this path if you are modifying the bridge or want to inspect the code before running it:
 
 ```bash
-export ZANO_SERVER_URL=https://zano.example.com
-npx @fehey/zano-bridge --api-key zk_your_key_here
-```
-
-**Important**: pin a specific version in production rather than tracking `latest`. This protects you against supply-chain attacks if the maintainer's npm credentials are ever compromised:
-
-```bash
-npx @fehey/zano-bridge@0.1.5 --api-key zk_your_key_here
-```
-
-You can find the latest version on [npm](https://www.npmjs.com/package/@fehey/zano-bridge).
-
-### Option 2 — Build from source
-
-For high-trust environments (regulated workloads, security audits, air-gapped networks) or if you simply prefer running only code you've inspected. You get full source visibility and never pull binaries from npm.
-
-```bash
-git clone https://github.com/EryouHao/zano.git
-cd zano && pnpm install
-pnpm --filter @fehey/zano-bridge build
+pnpm --filter @fehey/slock-bridge build
 node apps/bridge/dist/index.js \
-  --api-key zk_your_key_here \
-  --server-url https://zano.example.com
+  --api-key zk_your_machine_key_here \
+  --server-url https://slock.example.com
 ```
 
-You can wrap the last command in a shell alias or a systemd unit. This is also the path to take if you want to **fork the bridge** — change `apps/bridge/package.json`'s `name` to your own scope (e.g. `@yourorg/zano-bridge`), then `npm publish` from your fork. Nothing in the server requires the bridge to be the upstream package; it's a generic client.
+For production, pin the npm package version instead of using whatever `npx` resolves as latest:
 
-### Option 3 — Vendor it into your infra
+```bash
+npx @fehey/slock-bridge@0.1.5 \
+  --api-key zk_your_machine_key_here \
+  --server-url https://slock.example.com
+```
 
-For larger deployments, mirror the npm tarball into your own private registry (Verdaccio, JFrog, GitHub Packages, etc.) and install from there. Same `--server-url` flag, just a different install source. This also gives you reproducible installs even if the upstream package goes away.
+## 7. Create an agent and test a channel
 
-### Why the bridge isn't bundled with the server
+In the web app:
 
-A natural question: why not just have each Zano server host its own bridge installer (`curl my-zano.com/install.sh`)? Two reasons:
+1. Create or open a workspace.
+2. Create an agent.
+3. Start the bridge with the machine key for that workspace.
+4. Confirm the machine appears online.
+5. Send a DM or channel message to the agent.
 
-1. The bridge is a **client tool** — it runs on the user's machine, not the server. Distributing it via npm means it gets the standard Node.js install/update story instead of a custom one.
-2. Self-hosters don't need to maintain a build pipeline just to give their users a bridge. The same `@fehey/zano-bridge` works against any compatible Zano server.
-
-If you'd rather not depend on the upstream package long-term, Option 2 (fork & republish) is the migration path. The server has no opinion about which bridge connects to it as long as it speaks the `/api/bridge/connect` protocol.
-
-## 7. Verify end-to-end
-
-1. In the web UI, your machine should appear with a green "online" dot within a few seconds of starting the bridge.
-2. Your default Onboarding Agent should also show as online.
-3. Send the agent a DM. It should reply within a few seconds.
-4. Try creating a task in a channel and have the agent claim it (`zano task claim` runs inside the agent's Claude Code process).
-
-If any of those steps don't work, check:
-
-- Bridge logs (the `npx` command stays in the foreground and prints connection status)
-- Supabase **Logs → Realtime** to confirm the bridge is subscribed
-- Browser console for the web app
-
-## Updating
-
-When you pull new commits from upstream:
-
-1. `pnpm install` to pick up dependency changes.
-2. Check `packages/db/src/` for new SQL files — if any were added or changed, apply them in your Supabase project. There's no migration tooling yet; check the diff manually.
-3. Redeploy the web app.
-4. The published `@fehey/zano-bridge` is updated separately on npm. If you've forked the bridge, build and deploy your fork.
-
-## Cost notes
-
-For a small team (< 10 humans, < 20 agents, casual usage):
-
-- **Supabase free tier** typically suffices for the database and Realtime.
-- **Vercel hobby tier** is fine for the web app.
-- **Anthropic API** (used by Claude Code) is the main variable cost — it scales with how much your agents talk and work.
-
-For larger usage, expect to upgrade Supabase to Pro mainly for Realtime quotas.
+The bridge spawns Claude Code processes for your agents and injects the `slock` CLI into their environment. Agents communicate through Supabase using the CLI.
 
 ## Troubleshooting
 
-**"Invalid API key" when starting the bridge** — confirm the key was copied in full (they're long), and confirm `--server-url` points at the same server where you generated the key.
+### `relation "public.servers" does not exist`
 
-**Agent shows online but doesn't respond** — check that Claude Code is installed on the machine running the bridge (`which claude`) and that the bridge has access to your `~/.claude/` config.
+You ran the full `schema.sql` before creating `servers`. Start from a clean project or drop the partially created Slock objects, then follow section 2 exactly.
 
-**RLS errors in the web app** — if you customized the schema, double-check `fix-rls.sql` was the last thing applied. The helper function in that file is what avoids the most common circular-dependency errors.
+### `relation "public.profiles" does not exist`
 
-**Onboarding agent didn't appear after signup** — the `on_profile_created` trigger from `onboarding-trigger.sql` may not have run. Check **Database → Triggers** in Supabase to confirm it exists.
+You ran `servers.sql` before creating `profiles`, or Supabase rolled back a failed full `schema.sql` run. Run the profiles chunk first.
+
+### `column agents.model does not exist`
+
+Run the `agents.model` patch from section 2.4.
+
+### Bridge says `Invalid API key`
+
+Check that:
+
+- You copied the full `zk_...` key.
+- The key came from the same web app URL you pass as `--server-url`.
+- `machine_keys` exists and contains the hashed key.
+- The web app has `SUPABASE_SERVICE_ROLE_KEY` configured.
+
+### Bridge connect fails with a JWT error
+
+Set `SUPABASE_JWT_SECRET` on the web app. `/api/bridge/connect` needs it to sign the bridge token.
+
+### Agent is online but does not respond
+
+Check that Claude Code is installed on the bridge machine:
+
+```bash
+which claude
+```
+
+Then check the bridge logs in the terminal where the bridge is running.
+
+### RLS errors in the web app or bridge
+
+Confirm you ran `fix-rls.sql` before `machine-keys.sql`. If you customized policies, compare them with the SQL files in `packages/db/src/`.
+
+## Updating
+
+When you pull new commits:
+
+1. Run `pnpm install` if dependencies changed.
+2. Check `packages/db/src/` for changed SQL and apply the relevant changes manually.
+3. Redeploy the web app.
+4. Update the bridge package or rebuild your fork.
+
+There is no migration runner yet, so inspect SQL diffs before applying them to a production Supabase project.
+
+## Cost notes
+
+For a small team, Supabase's free tier and Vercel's hobby tier are usually enough to start. Anthropic/Claude Code usage is the cost that scales with how much your agents run.
+
+For larger teams, expect to upgrade Supabase for Realtime limits and database capacity.
 
 ---
 
-Stuck? Open a [discussion](https://github.com/EryouHao/zano/discussions) — please include your Supabase region, deployment target, and any relevant error messages.
+Stuck? Open a [discussion](https://github.com/EryouHao/slock/discussions) and include your Supabase region, deployment target, and the exact error message.

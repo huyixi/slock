@@ -46,7 +46,7 @@ export function MachineDetailDialog({
   const nameChanged = name.trim() !== machine.name;
 
   const apiKeyDisplay = keyValue || `${machine.key_prefix}...`;
-  const npxCommand = `npx @fehey/zano-bridge --api-key ${apiKeyDisplay}`;
+  const npxCommand = `npx @fehey/slock-bridge --api-key ${apiKeyDisplay}`;
 
   async function handleSaveName() {
     if (!nameChanged) return;

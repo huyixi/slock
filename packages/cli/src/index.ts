@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 
 /**
- * Zano CLI — The command-line tool agents use to communicate with Zano.
+ * Slock CLI — The command-line tool agents use to communicate with Slock.
  *
  * Talks directly to Supabase. Auth via environment variables:
- *   ZANO_AGENT_ID      — UUID of the agent
- *   ZANO_SUPABASE_URL  — Supabase project URL
- *   ZANO_SUPABASE_KEY  — Supabase anon/service key
+ *   SLOCK_AGENT_ID      — UUID of the agent
+ *   SLOCK_SUPABASE_URL  — Supabase project URL
+ *   SLOCK_SUPABASE_KEY  — Supabase anon/service key
  *
  * Usage:
- *   zano message send --target "#general" <<'EOF'
+ *   slock message send --target "#general" <<'EOF'
  *   Hello everyone!
  *   EOF
- *   zano message check
- *   zano message read --channel "#general"
- *   zano message search --query "keyword"
- *   zano server info
- *   zano task list --channel "#general"
- *   zano task create --channel "#general" --title "Fix the bug"
- *   zano task claim --number 3
- *   zano task unclaim --number 3
- *   zano task update --number 3 --status done
+ *   slock message check
+ *   slock message read --channel "#general"
+ *   slock message search --query "keyword"
+ *   slock server info
+ *   slock task list --channel "#general"
+ *   slock task create --channel "#general" --title "Fix the bug"
+ *   slock task claim --number 3
+ *   slock task unclaim --number 3
+ *   slock task update --number 3 --status done
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -31,19 +31,19 @@ import { join } from "path";
 // Bootstrap
 // ---------------------------------------------------------------------------
 
-const AGENT_ID = process.env.ZANO_AGENT_ID;
-const SUPABASE_URL = process.env.ZANO_SUPABASE_URL;
-const SUPABASE_KEY = process.env.ZANO_SUPABASE_KEY;
-const AUTH_TOKEN = process.env.ZANO_AUTH_TOKEN;
+const AGENT_ID = process.env.SLOCK_AGENT_ID;
+const SUPABASE_URL = process.env.SLOCK_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SLOCK_SUPABASE_KEY;
+const AUTH_TOKEN = process.env.SLOCK_AUTH_TOKEN;
 
 function fail(code: string, message: string): never {
   process.stderr.write(JSON.stringify({ ok: false, code, message }) + "\n");
   process.exit(1);
 }
 
-if (!AGENT_ID) fail("MISSING_AGENT_ID", "ZANO_AGENT_ID is not set");
-if (!SUPABASE_URL) fail("MISSING_SUPABASE_URL", "ZANO_SUPABASE_URL is not set");
-if (!SUPABASE_KEY) fail("MISSING_SUPABASE_KEY", "ZANO_SUPABASE_KEY is not set");
+if (!AGENT_ID) fail("MISSING_AGENT_ID", "SLOCK_AGENT_ID is not set");
+if (!SUPABASE_URL) fail("MISSING_SUPABASE_URL", "SLOCK_SUPABASE_URL is not set");
+if (!SUPABASE_KEY) fail("MISSING_SUPABASE_KEY", "SLOCK_SUPABASE_KEY is not set");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
@@ -358,7 +358,7 @@ async function formatMessage(msg: {
 // ---------------------------------------------------------------------------
 
 function getLastCheckedPath(): string {
-  return join(process.cwd(), ".zano", "last-checked");
+  return join(process.cwd(), ".slock", "last-checked");
 }
 
 function getLastChecked(): string | null {
@@ -889,24 +889,24 @@ async function main() {
       return cmdTaskUpdate(flags);
 
     default:
-      console.log(`Zano CLI v0.1.0
+      console.log(`Slock CLI v0.1.0
 
 Usage:
-  zano message send --target "#channel"    Send a message (content via stdin)
-  zano message check                       Check for new messages
-  zano message read --channel "#channel"   Read channel history
-  zano message search --query "keyword"    Search messages
-  zano server info                         Show server info
-  zano task list [--channel "#channel"]    List tasks
-  zano task create --channel "#ch" --title "T"  Create a task
-  zano task claim --number N               Claim a task
-  zano task unclaim --number N             Release a task
-  zano task update --number N --status S   Update task status
+  slock message send --target "#channel"    Send a message (content via stdin)
+  slock message check                       Check for new messages
+  slock message read --channel "#channel"   Read channel history
+  slock message search --query "keyword"    Search messages
+  slock server info                         Show server info
+  slock task list [--channel "#channel"]    List tasks
+  slock task create --channel "#ch" --title "T"  Create a task
+  slock task claim --number N               Claim a task
+  slock task unclaim --number N             Release a task
+  slock task update --number N --status S   Update task status
 
 Environment:
-  ZANO_AGENT_ID        Agent UUID
-  ZANO_SUPABASE_URL    Supabase project URL
-  ZANO_SUPABASE_KEY    Supabase anon key`);
+  SLOCK_AGENT_ID        Agent UUID
+  SLOCK_SUPABASE_URL    Supabase project URL
+  SLOCK_SUPABASE_KEY    Supabase anon key`);
       break;
   }
 }
